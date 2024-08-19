@@ -124,10 +124,6 @@ h2 {
     margin-top: 2.5vh;
     padding: 0;
     border: 3px solid gray;
-
-    /* note cursor is fixed 30px PNG - locked to BRUSH_SIZE of 30 */
-    /* TODO: SVG cursor? */
-    cursor: url(paintbrush-cursor.cur) 16 16, crosshair !important;
 }
 
 .exampleImage {

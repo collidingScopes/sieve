@@ -1,5 +1,14 @@
 /*
 To do list:
+Move color functions in separate js file which can be imported to all future projects
+Can this effect be applied on top of an image (either directly, or to reveal pixels, or to glitch?)
+Allow toggle for random color or not, if not -- allow user to choose the master color
+New effect idea:
+- Import image
+- Draw only the darkest luminosity pixels (with some sketchiness)
+- Shimmer the image using this effect
+- Or instead, add shadow pixels at a certain angle (smear the darkest pixels while reducing opacity?)
+- Use a power function for the smear
 */
 
 var canvas = document.getElementById("canvas");
@@ -12,11 +21,22 @@ var canvasHeight = 1000;
 var maxCanvasWidth = 2000;
 var maxCanvasHeight = 2000;
 
+var imageInput = document.getElementById('imageInput');
+imageInput.addEventListener('change', readSourceImage);
+var isImageLoaded = false;
+var userImage = document.getElementById('userImg');
+
+var actualWidth;
+var actualHeight;
+var scaledWidth;
+var scaledHeight;
+var widthScalingRatio;
+var isImageLoaded = false;
+var maxImageWidth = 1080; //can be tweaked
+
 var animationSpeed;
 var animationRequest;
 var playAnimationToggle = false;
-
-var backgroundColor;
 
 //detect user browser
 var ua = navigator.userAgent;
@@ -51,41 +71,46 @@ var videofps = 30;
 
 //add gui
 var obj = {
-  brushSize: Math.min(150, window.innerWidth*0.18),
-  brushDensity: 5,
-  opacity: 100,
-  animationSpeed: 10,
-  marker: true,
-  markerColor: "#ffffff",
-  solidColor: "#000000",
+  numWaves: 2,
+  waveAmplitude: 20,
+  drawProbability: 70,
+  roundingFactor: 100,
+  backgroundColor: "#fff8e3",
   canvasWidth: 1000,
   canvasHeight: 1000,
 };
-var backgroundType = obj.startingCanvas;
+var numWaves = obj.numWaves;
+var waveAmplitude = obj.waveAmplitude / 100;
+var backgroundColor = obj.backgroundColor;
+var drawProbability = obj.drawProbability/100;
+var roundingFactor = obj.roundingFactor;
 
 var gui = new dat.gui.GUI( { autoPlace: false } );
 gui.close();
 var guiOpenToggle = false;
 
 // Choose from accepted values
-gui.addColor(obj, "solidColor").name("Solid Color").onFinishChange(initiateBackground);
+gui.addColor(obj, "backgroundColor").name("Background Color").onFinishChange(newCanvas);
 
 obj['selectImage'] = function () {
   imageInput.click();
 };
 gui.add(obj, 'selectImage').name('Select Image');
 
-gui.add(obj, "brushSize").min(10).max(500).step(1).name('Brush Size').listen().onChange(getUserInputs);
-gui.add(obj, "brushDensity").min(1).max(100).step(1).name('Brush Density').listen().onChange(getUserInputs);
-gui.add(obj, "opacity").min(5).max(100).step(1).name('Brush Opacity').listen().onChange(getUserInputs);
-gui.add(obj, "animationSpeed").min(1).max(50).step(1).name('Animation Speed').onChange(getUserInputs);
-gui.add(obj, "marker").name("Marker Dot (m)").listen().onChange(toggleMarkerDraw);
-gui.addColor(obj, "markerColor").name("Marker Color").onFinishChange(getUserInputs);
+gui.add(obj, "numWaves").min(0).max(100).step(0.1).name('# Waves').onChange(refresh);
+gui.add(obj, "waveAmplitude").min(0).max(100).step(1).name('Wave Amplitude').onChange(refresh);
+gui.add(obj, "drawProbability").min(1).max(100).step(1).name('Draw Probability').onChange(refresh);
+gui.add(obj, "roundingFactor").min(0).max(100).step(1).name('Smoothness').onChange(refresh);
 
 obj['refreshCanvas'] = function () {
   resetCanvas();
 };
 gui.add(obj, 'refreshCanvas').name("Refresh Canvas (r)");
+
+obj['newCanvas'] = function () {
+  newCanvas();
+};
+gui.add(obj, 'newCanvas').name("New Canvas (n)");
 
 obj['saveImage'] = function () {
 saveImage();
@@ -97,18 +122,13 @@ obj['saveVideo'] = function () {
 };
 gui.add(obj, 'saveVideo').name("Start/Stop Video Export (v)");
 
-obj['animate'] = function () {
-  pausePlayAnimation();
+obj['importImage'] = function () {
+  imageInput.click();
 };
-gui.add(obj, 'animate').name("Play Randomized Animation (p)");
+gui.add(obj, 'importImage').name("Import Image");
 
-obj['lock'] = function () {
-  lockUnlockCanvas();
-};
-gui.add(obj, 'lock').name("Lock/Unlock Canvas (l)");
-
-gui.add(obj, "canvasWidth").max(maxCanvasWidth).name("Canvas Width").onChange(getUserInputs);
-gui.add(obj, "canvasHeight").max(maxCanvasHeight).name("Canvas Height").onChange(getUserInputs);
+gui.add(obj, "canvasWidth").max(maxCanvasWidth).name("Canvas Width").listen().onChange(refresh);
+gui.add(obj, "canvasHeight").max(maxCanvasHeight).name("Canvas Height").listen().onChange(refresh);
 
 customContainer = document.getElementById( 'gui' );
 customContainer.appendChild(gui.domElement);
@@ -120,18 +140,24 @@ function getUserInputs(){
   canvas.width = canvasWidth;
   canvas.height = canvasHeight;
   console.log("width/height: "+canvasWidth+", "+canvasHeight);
+
+  numWaves = obj.numWaves;
+  waveAmplitude = obj.waveAmplitude / 100;
+  backgroundColor = obj.backgroundColor;
+  drawProbability = obj.drawProbability/100;
+  roundingFactor = obj.roundingFactor;
   
-  BRUSH_SIZE = obj.brushSize;
-  SMUDGE_SIZE = obj.brushDensity/100 * BRUSH_SIZE;
-  LIQUIFY_CONTRAST = obj.opacity/100;
-  markerColor = obj.markerColor;
-  backgroundColor = obj.solidColor;
   animationSpeed = 500 / obj.animationSpeed;
 }
 
 function refresh(){
   getUserInputs();
   startAnimation();
+}
+
+function newCanvas(){
+  getUserInputs();
+  initiateBackground();
 }
 
 var numRows;
@@ -183,7 +209,8 @@ function initiateBackground(){
         hue1 = hueArray[row][col-1];
         color1 = colorArray[row][col-1];
       }
-      
+
+      /*
       if(Math.random()>0.05){
         hue2 = randomWithinRange(hue1,hueRange);
         color2 = "hsl("+hue2+","+(randomWithinRange(saturation,saturationRange))*100+"%,"+(randomWithinRange(lightness,saturationRange))*100+"%)";
@@ -191,6 +218,10 @@ function initiateBackground(){
         color2 = "#0f083e";
         hue2 = getHueFromHex(color2);
       }
+      */
+
+      hue2 = randomWithinRange(hue1,hueRange);
+      color2 = "hsl("+hue2+","+(randomWithinRange(saturation,saturationRange))*100+"%,"+(randomWithinRange(lightness,saturationRange))*100+"%)";
 
       hueArray[row].push(hue2);
       colorArray[row].push(color2);
@@ -220,15 +251,23 @@ function startAnimation(){
   }//cancel any existing animation loops 
   playAnimationToggle = true;
 
-  ctx.fillStyle = "black";
-  ctx.fillRect(0,0,canvasWidth,canvasHeight);
+  //ctx.fillStyle = "black";
+  //ctx.fillStyle = "#fff8e3";
+  //ctx.fillStyle = "#0c0d47";
+  
+  if(isImageLoaded == false){
+    ctx.fillStyle = backgroundColor;
+    ctx.fillRect(0,0,canvasWidth,canvasHeight);
+  } else {
+    console.log("Draw image to canvas (2)");
+    drawImageToCanvas();
+  }
 
-  var numDotsPerFrame = canvasHeight * 2;
+
+  var numDotsPerFrame = canvasHeight;
   var counter = 0;
   var xShift = 0;
-  var maxXShift = canvasWidth * 0.5;
-
-  var randomness = 1; //make this modular
+  var maxXShift = 0;
 
   animationRequest = requestAnimationFrame(loop);
 
@@ -237,20 +276,22 @@ function startAnimation(){
     if(playAnimationToggle==true){
 
       counter++;
+      maxXShift = canvasWidth*0 + (canvasWidth * waveAmplitude * Math.random());
+      /*randomness = 1000;*/
       
       for(i=0; i<numDotsPerFrame; i++){
 
         var currentX = counter % canvasWidth;
+        //var currentX = canvasWidth/2 + Math.sin(counter / canvasWidth * Math.PI*4) * canvasWidth/2;
         var currentY = i % canvasHeight;
 
-        /*
-        if(Math.random() < 0.3){
+        if(Math.random() < (1-drawProbability)){
           continue;
         }
-        */
+        
+        //xShift = Math.pow(Math.sin( (i+counter)*12*Math.PI*2 / randomness ), 1) * maxXShift;
+        xShift = Math.round(Math.sin(i/canvasHeight * Math.PI * numWaves)*roundingFactor)/roundingFactor * maxXShift;
 
-        xShift = Math.pow(Math.sin( (i+counter)*12*Math.PI*2 / randomness ), 5) * maxXShift;
-  
         var currentRow = Math.min(numRows-1, Math.max(0, Math.floor( (currentY/canvasHeight) * numRows)));
         var numCols = colorArray[currentRow].length;
         var currentCol = Math.min(numCols-1, Math.floor( (currentX / canvasWidth) * numCols));
@@ -262,8 +303,9 @@ function startAnimation(){
         var currentPower = powerArray[currentRow][currentCol];
   
         var actualX = currentCol*cellWidth + Math.pow(Math.random(),currentPower) * cellWidth;
-        var actualY = currentRow*cellHeight + Math.pow(Math.random(),1) * cellHeight;
-  
+        //var actualY = currentRow*cellHeight + Math.pow(Math.random(),1) * cellHeight;
+        var actualY = currentY;
+
         ctx.fillStyle = currentColor;
         ctx.fillRect(actualX + xShift,actualY,1,1);
       }
@@ -317,24 +359,29 @@ function readSourceImage(){
           scaledHeight = Math.floor(scaledHeight/8)*8; //video encoder wants a multiple of 8
           console.log("Image width/height: "+scaledWidth+", "+scaledHeight);
 
+          isImageLoaded = true;
           drawImageToCanvas();
-          chooseBackground();
-          canvas.scrollIntoView({behavior:"smooth"});
+          refresh();
           
       };
   };
     
   reader.readAsDataURL(file);
-  isImageLoaded = true;
 
 }
 
 function drawImageToCanvas(){
+  
+  console.log("draw image to canvas");
+
   //resize the src variable of the original image
   canvasWidth = scaledWidth;
   canvasHeight = scaledHeight;
   canvas.width = canvasWidth;
   canvas.height = canvasHeight;
+
+  obj.canvasWidth = canvasWidth;
+  obj.canvasHeight = canvasHeight;
   
   //draw the resized image onto the canvas
   ctx.drawImage(userImage, 0, 0, scaledWidth, scaledHeight);
@@ -476,6 +523,8 @@ document.addEventListener('keydown', function(event) {
       pausePlayAnimation();
   } else if(event.key === 'm'){
       toggleMarkerDraw();
+  }  else if(event.key === 'n'){
+      newCanvas();
   }
  
 });
