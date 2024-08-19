@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" type="text/css" href="style.css">
+  <script type="text/javascript" src="dat.gui-master/build/dat.gui.min.js"></script>
+
+  <!-- Google fonts
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&display=swap" rel="stylesheet">
+   -->
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+  <!--
+  <meta property="og:title" content="Hiroshi Nagai - animated painting" />
+  <meta property="og:description" content="Create your own animated painting" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://collidingscopes.github.io/nagai/" />
+  <meta property="og:image" content="https://collidingscopes.github.io/nagai/images/Shikoku.png">
+  <meta property="og:image:type" content="image/png" >
+  <meta property="og:image:width" content="866" >
+  <meta property="og:image:height" content="825" >
+
+
+  <link rel="icon" href="images/siteFavicon3.png">
+  <link rel="apple-touch-icon" href="images/siteFavicon3.png">
+    -->
+  
+</head>
+<body>
+<!--
+Choose an image URL:
+<input id="image-src" type="text" value="http://"><button id="load-image">Load image</button>
+-->
+
+<div id="toolDiv">
+  <div id="gui"></div>
+  <div id="canvasSizeTextBox"></div>
+
+  <canvas id="canvas"></canvas>
+
+  <div id="videoRecordingMessageDiv" class="hidden sticky-bottom">
+      Video recording underway. Press menu button or "v" to stop. The video will be saved to your downloads folder afterwards.
+  </div>
+
+</div>
+
+</body>
+
+<script src='perlin.js'></script>
+<script src="sieve.js"></script>
+<script src="mp4-muxer-main/build/mp4-muxer.js"></script>
+
+
+</html>
